@@ -126,6 +126,58 @@ class Shape(Loadable):
     """
     
     self.children = []
+    
+ 
+  def fast_draw(self, shader=None, txtrs=None, ntl=None, shny=None, camera=None, mlist=[]):
+    """If called without parameters, there has to have been a previous call to
+    set_draw_details() for each Buffer in buf[].
+    NB there is no facility for setting umult and vmult with draw: they must be
+    set using set_draw_details or Buffer.set_draw_details.
+    """
+    self.load_opengl() # really just to set the flag so _unload_opengl runs
+
+    from pi3d.Camera import Camera
+
+    camera = camera or self._camera or Camera.instance()
+    shader = shader or self.shader
+    shader.use()
+
+    if self.MFlg == True: #or len(mlist):
+      # Calculate rotation and translation matrix for this model using numpy.
+      self.MRaw = dot(self.tr2, self.tr1)
+      # child drawing addition #############
+      newmlist = [m for m in mlist]
+      newmlist.append(self.MRaw)
+      if len(self.children) > 0:
+        for c in self.children:
+          c.draw(shader, txtrs, ntl, shny, camera, newmlist)
+      for m in mlist[-1::-1]:
+        self.MRaw = dot(self.MRaw, m)
+      ######################################
+      self.M[0:16] = self.MRaw.ravel()
+      #self.M[0:16] = c_floats(self.MRaw.reshape(-1).tolist()) #pypy version
+      self.M[16:32] = dot(self.MRaw, camera.mtrx).ravel()
+      #self.M[16:32] = c_floats(dot(self.MRaw, camera.mtrx).reshape(-1).tolist()) #pypy
+      self.MFlg = False
+
+#    elif camera.was_moved:
+#      # Only do this if it's not done because model moved.
+#      self.M[16:32] = dot(self.MRaw, camera.mtrx).ravel()
+#
+#    if camera.was_moved:
+#      self.unif[18:21] = camera.eye[0:3]
+
+    opengles.glUniformMatrix4fv(shader.unif_modelviewmatrix, 2,
+                                ctypes.c_int(0),
+                                ctypes.byref(self.M))
+
+    opengles.glUniform3fv(shader.unif_unif, 20, ctypes.byref(self.unif))
+    for b in self.buf:
+      # Shape.draw has to be passed either parameter == None or values to pass
+      # on.
+      b.draw(self, shader, txtrs, ntl, shny)
+   
+    
 
   def draw(self, shader=None, txtrs=None, ntl=None, shny=None, camera=None, mlist=[]):
     """If called without parameters, there has to have been a previous call to
