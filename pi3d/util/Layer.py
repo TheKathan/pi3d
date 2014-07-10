@@ -5,23 +5,18 @@ from pi3d.constants import *
 from pi3d.Shader import Shader
 from pi3d.util.OffScreenTexture import OffScreenTexture
 from pi3d.Camera import Camera
-from pi3d.shape.Plane import Plane
+from pi3d.shape.FlipSprite import FlipSprite
+from pi3d.Display import Display
 
 class Layer(OffScreenTexture):
   """For creating a depth-of-field blurring effect on selected objects"""
-  def __init__(self, file, camera, shader=None, blend=True, mipmap=False):
+  def __init__(self, camera, shader=None, blend=True, mipmap=False, flip=False, z=1):
     """ calls Texture.__init__ but doesn't need to set file name as
     texture generated from the framebuffer
-    """
-    
+    """   
     super(Layer, self).__init__("Layer")
     
-    self.camera = camera
-    self.surface = Plane(camera=camera, w=self.ix, h=self.iy, z=1)
-    self.alpha = False
-    self.blend = True
-    self.mipmap= mipmap
-    self.tex_list = [self] # TODO check if this self reference causes graphics memory leaks
+    self.sprite = FlipSprite(camera=camera, w=Display.INSTANCE.width, h=Display.INSTANCE.height, z=z, flip=True)
     
     # load shader for casting shadows and camera
     if shader==None:
@@ -37,24 +32,14 @@ class Layer(OffScreenTexture):
     background then re-draw them using the blur() method. Large objects
     will obviously take a while to draw and re-draw
     """
-    opengles.glClearColor(ctypes.c_float(0.0), ctypes.c_float(0.0), 
-                        ctypes.c_float(0.0), ctypes.c_float(0.0))
     super(Layer, self)._start()
-#    self.camera.reset(is_3d=False)
-#    self.location = (0,0,0)
-#    self.camera.position(self.location)
 
   def end_layer(self):
     """ stop capturing to texture and resume normal rendering to default
     """
-    opengles.glClearColor(ctypes.c_float(0.0), ctypes.c_float(0.0), 
-                        ctypes.c_float(0.0), ctypes.c_float(0.0))    
     super(Layer, self)._end()
-    # change background back to blue
-#    opengles.glClearColor(ctypes.c_float(0.4), ctypes.c_float(0.8), 
-#                        ctypes.c_float(0.8), ctypes.c_float(1.0))
 
     
   def draw_layer(self):
-    self.surface.draw(shader=self.shader, camera=self.camera, txtrs=[self], ntl=0, shny=0)
-#    self.surface.draw(self.shader, [self], 0.0, 0.0)
+    self.sprite.draw(self.shader, [self])
+
