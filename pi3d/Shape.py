@@ -141,18 +141,21 @@ class Shape(Loadable):
     camera = camera or self._camera or Camera.instance()
     shader = shader or self.shader
     shader.use()
+    
+    if len(mlist):
+        print("fast draw not displaying list")
 
     if self.MFlg == True: #or len(mlist):
       # Calculate rotation and translation matrix for this model using numpy.
       self.MRaw = dot(self.tr2, self.tr1)
       # child drawing addition #############
-      newmlist = [m for m in mlist]
-      newmlist.append(self.MRaw)
-      if len(self.children) > 0:
-        for c in self.children:
-          c.draw(shader, txtrs, ntl, shny, camera, newmlist)
-      for m in mlist[-1::-1]:
-        self.MRaw = dot(self.MRaw, m)
+#      newmlist = [m for m in mlist]
+#      newmlist.append(self.MRaw)
+#      if len(self.children) > 0:
+#        for c in self.children:
+#          c.draw(shader, txtrs, ntl, shny, camera, newmlist)
+ #     for m in mlist[-1::-1]:
+ #       self.MRaw = dot(self.MRaw, m)
       ######################################
       self.M[0:16] = self.MRaw.ravel()
       #self.M[0:16] = c_floats(self.MRaw.reshape(-1).tolist()) #pypy version
