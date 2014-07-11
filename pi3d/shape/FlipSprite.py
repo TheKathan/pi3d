@@ -4,7 +4,7 @@ from pi3d.Buffer import Buffer
 from pi3d.shape.Sprite import Sprite
 
 class FlipSprite(Sprite):
-  """ 3d model inherits from Shape, differs from Plane in being single sided"""
+  """ Super of Sprite that allows the vertical to be flipped/mirrored"""
   def __init__(self, camera=None, light=None, w=1.0, h=1.0, name="",
                x=0.0, y=0.0, z=20.0,
                rx=0.0, ry=0.0, rz=0.0,

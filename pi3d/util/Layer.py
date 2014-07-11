@@ -9,11 +9,16 @@ from pi3d.shape.FlipSprite import FlipSprite
 from pi3d.Display import Display
 
 class Layer(OffScreenTexture):
-  """For creating a depth-of-field blurring effect on selected objects"""
-  def __init__(self, camera, shader=None, blend=True, mipmap=False, flip=False, z=1):
-    """ calls Texture.__init__ but doesn't need to set file name as
-    texture generated from the framebuffer
-    """   
+  """An off screen texture with a full screen sprite at a user defined depth
+  Used for drawing foreground shapes once and using over repeated frames.
+  Warning: Using DISPLAY.set_background() will also set the background colour of 
+  this layer.  Make the display background transparent and add a background layer"""
+  
+  def __init__(self, camera, shader=None, flip=True, z=1):
+    """Camera must be a 2d camera. Extra Keyword arguments:
+
+      *flip* Should the image be flipped over
+    """
     super(Layer, self).__init__("Layer")
     
     self.sprite = FlipSprite(camera=camera, w=Display.INSTANCE.width, h=Display.INSTANCE.height, z=z, flip=True)
