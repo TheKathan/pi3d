@@ -8,13 +8,21 @@ class OffScreenTexture(Texture):
   """For creating special effect after rendering to texture rather than
   onto the display. Used by Defocus, ShadowCaster, Clashtest etc
   """
-  def __init__(self, name):
+  def __init__(self, name, w=None, h=None):
     """ calls Texture.__init__ but doesn't need to set file name as
     texture generated from the framebuffer
     """
     super(OffScreenTexture, self).__init__(name)
     from pi3d.Display import Display
-    self.ix, self.iy = Display.INSTANCE.width, Display.INSTANCE.height
+    if(w == None):
+        self.ix = Display.INSTANCE.width
+    else:
+        self.ix = w
+    if(h == None):
+        self.iy = Display.INSTANCE.height
+    else:
+        self.iy = h
+        
     self.im = Image.new("RGBA",(self.ix, self.iy))
     self.image = self.im.convert("RGBA").tostring('raw', "RGBA")
     self.alpha = True

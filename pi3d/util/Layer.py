@@ -14,16 +14,35 @@ class Layer(OffScreenTexture):
   Warning: Using DISPLAY.set_background() will also set the background colour of 
   this layer.  Make the display background transparent and add a background layer"""
   
-  def __init__(self, camera, shader=None, flip=True, z=1):
+  def __init__(self, camera, shader=None, flip=True, w=None, h=None, z=1):
     """Camera must be a 2d camera. Extra Keyword arguments:
 
       *flip* Should the image be flipped over
+      *w* and *h* default to display size if not defined
+      *center* put the sprite at the full screen center. The main display must be initialized first if using 
     """
-    super(Layer, self).__init__("Layer")
+        
+    from pi3d.Display import Display
+    scrnheight = Display.INSTANCE.height
+    scrnwidth = Display.INSTANCE.width
+        
+    if w==None:
+        width = Display.INSTANCE.width
+    else:
+        width = w
+            
+    if h==None:
+        height = Display.INSTANCE.height
+    else:
+        height = h
+            
+    self.xoffset = int((width - scrnwidth) * 0.5)
+    self.yoffset = int((height - scrnheight) * 0.5)
+
+    super(Layer, self).__init__("Layer", w, h)    
+    self.sprite = FlipSprite(camera=camera, w=self.ix, h=self.iy, z=z, flip=True)
     
-    self.sprite = FlipSprite(camera=camera, w=Display.INSTANCE.width, h=Display.INSTANCE.height, z=z, flip=True)
-    
-    # load shader for casting shadows and camera
+    # If not defined, load shader for drawing layer
     if shader==None:
         self.shader = Shader("uv_flat")
     else:
