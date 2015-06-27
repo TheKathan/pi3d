@@ -52,7 +52,6 @@ class OffScreenTexture(Texture):
                 self.ix, self.iy)
     opengles.glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
                 GL_RENDERBUFFER, self.depthbuffer[0])
-    opengles.glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT)
     if clear:
         opengles.glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT)
         
