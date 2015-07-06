@@ -58,6 +58,14 @@ pi3d/shaders/shadowcast.fs
 pi3d/shaders/shadowcast.vs
 pi3d/shaders/star.fs
 pi3d/shaders/star.vs
+pi3d/shaders/std_bump.inc
+pi3d/shaders/std_head_fs.inc
+pi3d/shaders/std_head_vs.inc
+pi3d/shaders/std_light.inc
+pi3d/shaders/std_main_mat.inc
+pi3d/shaders/std_main_uv.inc
+pi3d/shaders/std_main_vs.inc
+pi3d/shaders/std_shine.inc
 pi3d/shaders/uv_bump.fs
 pi3d/shaders/uv_bump.vs
 pi3d/shaders/uv_flat.fs
@@ -79,6 +87,7 @@ pi3d/shape/EnvironmentCube.py
 pi3d/shape/Extrude.py
 pi3d/shape/Helix.py
 pi3d/shape/Lathe.py
+pi3d/shape/Lines.py
 pi3d/shape/LodSprite.py
 pi3d/shape/MergeShape.py
 pi3d/shape/Model.py
@@ -102,6 +111,7 @@ pi3d/util/Ctypes.py
 pi3d/util/DefaultInstance.py
 pi3d/util/Defocus.py
 pi3d/util/DisplayOpenGL.py
+pi3d/util/FixedString.py
 pi3d/util/Font.py
 pi3d/util/Gui.py
 pi3d/util/Loadable.py
@@ -110,8 +120,10 @@ pi3d/util/OffScreenTexture.py
 pi3d/util/Pngfont.py
 pi3d/util/PostProcess.py
 pi3d/util/RotateVec.py
+pi3d/util/Scenery.py
 pi3d/util/Screenshot.py
 pi3d/util/ShadowCaster.py
+pi3d/util/StereoCam.py
 pi3d/util/String.py
 pi3d/util/TkWin.py
 pi3d/util/Utility.py

@@ -2,12 +2,13 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import ctypes
 
-from numpy import array, dot
+from numpy import array, dot, savez, load, zeros
 from math import radians, pi, sin, cos
 
 from pi3d.constants import *
 from pi3d.Buffer import Buffer
 from pi3d.Light import Light
+from pi3d.Camera import Camera
 from pi3d.util import Utility
 from pi3d.util.Ctypes import c_floats
 
@@ -34,16 +35,19 @@ class Shape(Loadable):
     """
     super(Shape, self).__init__()
     self.name = name
-    light = light or Light.instance()
+    light = light if light is not None else Light.instance()
     # uniform variables all in one array (for Shape and one for Buffer)
-    self.unif = (ctypes.c_float * 60)(
+    self.unif =  (ctypes.c_float * 60)(
       x, y, z, rx, ry, rz,
       sx, sy, sz, cx, cy, cz,
       0.5, 0.5, 0.5, 5000.0, 0.8, 1.0,
-      0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+      0.0, 0.0, 0.0, light.is_point, 0.0, 0.0,
       light.lightpos[0], light.lightpos[1], light.lightpos[2],
       light.lightcol[0], light.lightcol[1], light.lightcol[2],
-      light.lightamb[0], light.lightamb[1], light.lightamb[2])
+      light.lightamb[0], light.lightamb[1], light.lightamb[2],
+      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     """ pass to shader array of vec3 uniform variables:
 
     ===== ========================================== ==== ==
@@ -58,64 +62,21 @@ class Shape(Loadable):
        4  fog shade                                   12  14
        5  fog distance, fog alpha, shape alpha        15  17
        6  camera position                             18  20
-       7  unused: custom data space                   21  23
+       7  point light if 1: light0, light1, unused    21  23
        8  light0 position, direction vector           24  26
        9  light0 strength per shade                   27  29
       10  light0 ambient values                       30  32
       11  light1 position, direction vector           33  35
       12  light1 strength per shade                   36  38
       13  light1 ambient values                       39  41
-      14  defocus dist, amount (only 2 used)          42  43
-      15  defocus frame width, height (only 2 used)   45  46
+      14  defocus dist, amount (only 2 used)          42  43 # also 2D x, y
+      15  defocus frame width, height (only 2 used)   45  46 # also 2D w, h, tot_ht
       16  custom data space                           48  50
       17  custom data space                           51  53
       18  custom data space                           54  56
       19  custom data space                           57  59
     ===== ========================================== ==== ==
-
-    Shape holds matrices that are updated each time it is moved or rotated
-    this saves time recalculating them each frame as the Shape is drawn
     """
-    self.tr1 = array([[1.0, 0.0, 0.0, 0.0],
-                      [0.0, 1.0, 0.0, 0.0],
-                      [0.0, 0.0, 1.0, 0.0],
-                      [self.unif[0] - self.unif[9], self.unif[1] - self.unif[10], self.unif[2] - self.unif[11], 1.0]])
-    """translate to position - offset"""
-    s, c = sin(radians(self.unif[3])), cos(radians(self.unif[3]))
-    self.rox = array([[1.0, 0.0, 0.0, 0.0],
-                      [0.0, c, s, 0.0],
-                      [0.0, -s, c, 0.0],
-                      [0.0, 0.0, 0.0, 1.0]])
-    """rotate about x axis"""
-    s, c = sin(radians(self.unif[4])), cos(radians(self.unif[4]))
-    self.roy = array([[c, 0.0, -s, 0.0],
-                      [0.0, 1.0, 0.0, 0.0],
-                      [s, 0.0, c, 0.0],
-                      [0.0, 0.0, 0.0, 1.0]])
-    """rotate about y axis"""
-    s, c = sin(radians(self.unif[5])), cos(radians(self.unif[5]))
-    self.roz = array([[c, s, 0.0, 0.0],
-                      [-s, c, 0.0, 0.0],
-                      [0.0, 0.0, 1.0, 0.0],
-                      [0.0, 0.0, 0.0, 1.0]])
-    """rotate about z axis"""
-    self.scl = array([[self.unif[6], 0.0, 0.0, 0.0],
-                      [0.0, self.unif[7], 0.0, 0.0],
-                      [0.0, 0.0, self.unif[8], 0.0],
-                      [0.0, 0.0, 0.0, 1.0]])
-    """scale"""
-    self.tr2 = array([[1.0, 0.0, 0.0, 0.0],
-                      [0.0, 1.0, 0.0, 0.0],
-                      [0.0, 0.0, 1.0, 0.0],
-                      [self.unif[9], self.unif[10], self.unif[11], 1.0]])
-    """translate to offset"""
-    self.MFlg = True
-    self.M = (ctypes.c_float * 32)(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-
-    self._camera = camera
     self.shader = None
     self.textures = []
 
@@ -126,60 +87,73 @@ class Shape(Loadable):
     """
     
     self.children = []
+    self._camera = camera
     
- 
-  def fast_draw(self, shader=None, txtrs=None, ntl=None, shny=None, camera=None, mlist=[]):
-    """If called without parameters, there has to have been a previous call to
-    set_draw_details() for each Buffer in buf[].
-    NB there is no facility for setting umult and vmult with draw: they must be
-    set using set_draw_details or Buffer.set_draw_details.
+    self.__init_matrices()
+
+  def __init_matrices(self):
     """
-    self.load_opengl() # really just to set the flag so _unload_opengl runs
+    Shape holds matrices that are updated each time it is moved or rotated
+    this saves time recalculating them each frame as the Shape is drawn
+    """
+    self.tr1 = array([[1.0, 0.0, 0.0, 0.0],
+                      [0.0, 1.0, 0.0, 0.0],
+                      [0.0, 0.0, 1.0, 0.0],
+                      [self.unif[0] - self.unif[9], self.unif[1] - self.unif[10], self.unif[2] - self.unif[11], 1.0]])
+    """translate to position - offset"""
 
-    from pi3d.Camera import Camera
+    s, c = sin(radians(self.unif[3])), cos(radians(self.unif[3]))
+    self.rox = array([[1.0, 0.0, 0.0, 0.0],
+                      [0.0, c, s, 0.0],
+                      [0.0, -s, c, 0.0],
+                      [0.0, 0.0, 0.0, 1.0]])
+    self.roxflg = True if self.unif[3] != 0.0 else False
+    """rotate about x axis"""
 
-    camera = camera or self._camera or Camera.instance()
-    shader = shader or self.shader
-    shader.use()
-    
-    if len(mlist):
-        print("fast draw not displaying list")
+    s, c = sin(radians(self.unif[4])), cos(radians(self.unif[4]))
+    self.roy = array([[c, 0.0, -s, 0.0],
+                      [0.0, 1.0, 0.0, 0.0],
+                      [s, 0.0, c, 0.0],
+                      [0.0, 0.0, 0.0, 1.0]])
+    self.royflg = True if self.unif[4] != 0.0 else False
+    """rotate about y axis"""
 
-    if self.MFlg == True: #or len(mlist):
-      # Calculate rotation and translation matrix for this model using numpy.
-      self.MRaw = dot(self.tr2, self.tr1)
-      # child drawing addition #############
-#      newmlist = [m for m in mlist]
-#      newmlist.append(self.MRaw)
-#      if len(self.children) > 0:
-#        for c in self.children:
-#          c.draw(shader, txtrs, ntl, shny, camera, newmlist)
- #     for m in mlist[-1::-1]:
- #       self.MRaw = dot(self.MRaw, m)
-      ######################################
-      self.M[0:16] = self.MRaw.ravel()
-      #self.M[0:16] = c_floats(self.MRaw.reshape(-1).tolist()) #pypy version
-      self.M[16:32] = dot(self.MRaw, camera.mtrx).ravel()
-      #self.M[16:32] = c_floats(dot(self.MRaw, camera.mtrx).reshape(-1).tolist()) #pypy
-      self.MFlg = False
+    s, c = sin(radians(self.unif[5])), cos(radians(self.unif[5]))
+    self.roz = array([[c, s, 0.0, 0.0],
+                      [-s, c, 0.0, 0.0],
+                      [0.0, 0.0, 1.0, 0.0],
+                      [0.0, 0.0, 0.0, 1.0]])
+    self.rozflg = True if self.unif[5] != 0.0 else False
+    """rotate about z axis"""
 
-#    elif camera.was_moved:
-#      # Only do this if it's not done because model moved.
-#      self.M[16:32] = dot(self.MRaw, camera.mtrx).ravel()
-#
-#    if camera.was_moved:
-#      self.unif[18:21] = camera.eye[0:3]
+    self.scl = array([[self.unif[6], 0.0, 0.0, 0.0],
+                      [0.0, self.unif[7], 0.0, 0.0],
+                      [0.0, 0.0, self.unif[8], 0.0],
+                      [0.0, 0.0, 0.0, 1.0]])
+    if self.unif[6] != 1.0 or self.unif[7] != 1.0 or self.unif[8] != 1.0:
+      self.sclflg = True 
+    else:
+      self.sclflg = False
+    """scale"""
 
-    opengles.glUniformMatrix4fv(shader.unif_modelviewmatrix, 2,
-                                ctypes.c_int(0),
-                                ctypes.byref(self.M))
+    self.tr2 = array([[1.0, 0.0, 0.0, 0.0],
+                      [0.0, 1.0, 0.0, 0.0],
+                      [0.0, 0.0, 1.0, 0.0],
+                      [self.unif[9], self.unif[10], self.unif[11], 1.0]])
+    if self.unif[9] != 0.0 or self.unif[10] != 0.0 or self.unif[11] != 0.0:
+      self.tr2flg = True 
+    else:
+      self.tr2flg = False
+    """translate to offset"""
 
-    opengles.glUniform3fv(shader.unif_unif, 20, ctypes.byref(self.unif))
-    for b in self.buf:
-      # Shape.draw has to be passed either parameter == None or values to pass
-      # on.
-      b.draw(self, shader, txtrs, ntl, shny)
-   
+    self.MFlg = True
+    self.M = zeros(32, dtype="float32").reshape(2,4,4)
+
+
+ 
+
+  def fast_draw(self, shader=None, txtrs=None, ntl=None, shny=None, camera=None, mlist=[]):
+	self.draw(shader, txtrs, ntl, shny, camera, mlist)
     
 
   def draw(self, shader=None, txtrs=None, ntl=None, shny=None, camera=None, mlist=[]):
@@ -190,50 +164,55 @@ class Shape(Loadable):
     """
     self.load_opengl() # really just to set the flag so _unload_opengl runs
 
-    from pi3d.Camera import Camera
-
     camera = camera or self._camera or Camera.instance()
-    shader = shader or self.shader
-    shader.use()
 
-    if self.MFlg == True or len(mlist):
+    if self.MFlg or len(mlist) > 0:
+      '''
       # Calculate rotation and translation matrix for this model using numpy.
       self.MRaw = dot(self.tr2,
         dot(self.scl,
             dot(self.roy,
                 dot(self.rox,
                     dot(self.roz, self.tr1)))))
+      '''
+      self.MRaw = self.tr1
+      if self.rozflg:
+        self.MRaw = dot(self.roz, self.MRaw)
+      if self.roxflg:
+        self.MRaw = dot(self.rox, self.MRaw)
+      if self.royflg:
+        self.MRaw = dot(self.roy, self.MRaw)
+      if self.sclflg:
+        self.MRaw = dot(self.scl, self.MRaw)
+      if self.tr2flg:
+        self.MRaw = dot(self.tr2, self.MRaw)
+
       # child drawing addition #############
       newmlist = [m for m in mlist]
       newmlist.append(self.MRaw)
       if len(self.children) > 0:
         for c in self.children:
-          c.draw(shader, txtrs, ntl, shny, camera, newmlist)
+          c.draw(shader, txtrs, ntl, shny, camera, newmlist) # TODO issues where child doesn't use same shader 
       for m in mlist[-1::-1]:
         self.MRaw = dot(self.MRaw, m)
       ######################################
-      self.M[0:16] = self.MRaw.ravel()
+      self.M[0,:,:] = self.MRaw[:,:]
       #self.M[0:16] = c_floats(self.MRaw.reshape(-1).tolist()) #pypy version
-      self.M[16:32] = dot(self.MRaw, camera.mtrx).ravel()
+      self.M[1,:,:] = dot(self.MRaw, camera.mtrx)[:,:]
       #self.M[16:32] = c_floats(dot(self.MRaw, camera.mtrx).reshape(-1).tolist()) #pypy
       self.MFlg = False
 
     elif camera.was_moved:
       # Only do this if it's not done because model moved.
-      self.M[16:32] = dot(self.MRaw, camera.mtrx).ravel()
+      self.M[1,:,:] = dot(self.MRaw, camera.mtrx)[:,:]
 
     if camera.was_moved:
       self.unif[18:21] = camera.eye[0:3]
 
-    opengles.glUniformMatrix4fv(shader.unif_modelviewmatrix, 2,
-                                ctypes.c_int(0),
-                                ctypes.byref(self.M))
-
-    opengles.glUniform3fv(shader.unif_unif, 20, ctypes.byref(self.unif))
     for b in self.buf:
       # Shape.draw has to be passed either parameter == None or values to pass
       # on.
-      b.draw(self, shader, txtrs, ntl, shny)
+      b.draw(self, self.M, self.unif, shader, txtrs, ntl, shny)
 
   def set_shader(self, shader):
     """Wrapper method to set just the Shader for all the Buffer objects of
@@ -283,7 +262,7 @@ class Shape(Loadable):
         b.textures.append(None)
       b.textures[1 + ofst] = normtex
       b.unib[0] = ntiles
-      if shinetex:
+      if shinetex is not None:
         while len(b.textures) < (3 + ofst):
           b.textures.append(None)
         b.textures[2 + ofst] = shinetex
@@ -312,6 +291,16 @@ class Shape(Loadable):
     """
     for b in self.buf:
       b.set_material(material)
+
+  def set_textures(self, textures):
+    """Wrapper for setting textures in each Buffer object.
+
+    Arguments:
+      *textures*
+        list of Texture objects
+    """
+    for b in self.buf:
+      b.set_textures(textures)
 
   def set_offset(self, offset):
     """Wrapper for setting uv texture offset in each Buffer object.
@@ -374,6 +363,7 @@ class Shape(Loadable):
     self.unif[stn:(stn + 3)] = light.lightpos[0:3]
     self.unif[(stn + 3):(stn + 6)] = light.lightcol[0:3]
     self.unif[(stn + 6):(stn + 9)] = light.lightamb[0:3]
+    self.unif[21 + num] = light.is_point
 
   def set_2d_size(self, w=None, h=None, x=0, y=0):
     """saves size to be drawn and location in pixels for use by 2d shader
@@ -391,9 +381,9 @@ class Shape(Loadable):
 
     """
     from pi3d.Display import Display
-    if w == None:
+    if w is None:
       w = Display.INSTANCE.width
-    if h == None:
+    if h is None:
       h = Display.INSTANCE.height
     self.unif[42:44] = [x, y]
     self.unif[45:48] = [w, h, Display.INSTANCE.height]
@@ -419,19 +409,52 @@ class Shape(Loadable):
     Arguments:
 
       *index_from*
-        start index in unif array for filling data should be 48 to 59 though
+        start index in unif array for filling data should be 48 to 59
         42 to 47 could be used if they do not conflict with existing shaders
         i.e. 2d_flat, defocus etc
       *data*
-        array of values to put in
+        2D array of values to put in [[a,b,c],[d,e,f]]
     """
     self.unif[index_from:(index_from + len(data))] = data
 
-  def set_point_size(self, point_size=0.0):
-    """if this is > 0.0  the vertices will be drawn as points"""
+  def set_point_size(self, point_size=1.0):
+    """This will set the draw_method in all Buffers of this Shape"""
     for b in self.buf:
       b.unib[8] = point_size
+      b.draw_method = GL_POINTS if point_size > 0.0 else GL_TRIANGLES
 
+  def set_line_width(self, line_width=1.0, closed=False):
+    """This will set the draw_method in all Buffers of this Shape
+
+      *line-width*
+        line width default 1
+
+      *closed*
+        if set to True then the last leg will be filled in. ie polygon
+    
+    NB it differs from point size in that glLineWidth() is called here
+    and that line width will be used for all subsequent draw() operations
+    so if you want to draw shapes with different thickness lines you will
+    have to call this method repeatedly just before each draw()
+    
+    Also, there doens't seem to be an equivalent of gl_PointSize as used
+    in the shader language to make lines shrink with distance.
+
+    If you are drawing lines with high contrast they will look better
+    anti aliased which is done by Display.create(samples=4) """
+    for b in self.buf:
+      b.unib[11] = line_width
+      opengles.glLineWidth(ctypes.c_float(line_width))
+      if closed:
+        b.draw_method = GL_LINE_LOOP if line_width > 0.0 else GL_TRIANGLES
+      else:
+        b.draw_method = GL_LINE_STRIP if line_width > 0.0 else GL_TRIANGLES
+
+  def re_init(self, pts=None, texcoords=None, normals=None, offset=0):
+    """ wrapper for Buffer.re_init()
+    """
+    self.buf[0].re_init(pts, texcoords, normals, offset)
+    
   def add_child(self, child):
     """puts a Shape into the children list"""
     self.children.append(child)
@@ -452,22 +475,16 @@ class Shape(Loadable):
     """Find the limits of vertices in three dimensions. Returns a tuple
     (left, bottom, front, right, top, back)
     """
-    left, bottom, front  = 10000, 10000, 10000
-    right, top, back = -10000, -10000, -10000
+    left, bottom, front  = 10000.0, 10000.0, 10000.0
+    right, top, back = -10000.0, -10000.0, -10000.0
     for b in self.buf:
-      for v in b.vertices:
-        if v[0] < left:
-          left = v[0]
-        if v[0] > right:
-          right = v[0]
-        if v[1] < bottom:
-          bottom = v[1]
-        if v[1] > top:
-          top = v[1]
-        if v[2] < front:
-          front = v[2]
-        if v[2] > back:
-          back = v[2]
+      v = b.array_buffer # alias to simplify code. vertices are array_buffer[:,0:3]
+      left = min(left, v[:,0].min())
+      bottom = min(bottom, v[:,1].min())
+      front = min(front, v[:,2].min())
+      right = max(right, v[:,0].max())
+      top = max(top, v[:,1].max())
+      back = max(back, v[:,2].max())
 
     return (left, bottom, front, right, top, back)
 
@@ -484,8 +501,11 @@ class Shape(Loadable):
     self.scl[0, 0] = sx
     self.scl[1, 1] = sy
     self.scl[2, 2] = sz
-    self.unif[6:9] = sx, sy, sz
+    self.unif[6] = sx
+    self.unif[7] = sy
+    self.unif[8] = sz
     self.MFlg = True
+    self.sclflg = True
 
   def position(self, x, y, z):
     """Arguments:
@@ -500,7 +520,9 @@ class Shape(Loadable):
     self.tr1[3, 0] = x - self.unif[9]
     self.tr1[3, 1] = y - self.unif[10]
     self.tr1[3, 2] = z - self.unif[11]
-    self.unif[0:3] = x, y, z
+    self.unif[0] = x
+    self.unif[1] = y
+    self.unif[2] = z
     self.MFlg = True
 
   def positionX(self, v):
@@ -593,6 +615,7 @@ class Shape(Loadable):
     self.rox[2, 1] = -s
     self.unif[3] = v
     self.MFlg = True
+    self.roxflg = True
 
   def rotateToY(self, v):
     """Arguments:
@@ -606,6 +629,7 @@ class Shape(Loadable):
     self.roy[2, 0] = s
     self.unif[4] = v
     self.MFlg = True
+    self.royflg = True
 
   def rotateToZ(self, v):
     """Arguments:
@@ -619,6 +643,7 @@ class Shape(Loadable):
     self.roz[1, 0] = -s
     self.unif[5] = v
     self.MFlg = True
+    self.rozflg = True
 
   def rotateIncX(self, v):
     """Arguments:
@@ -632,6 +657,7 @@ class Shape(Loadable):
     self.rox[1, 2] = s
     self.rox[2, 1] = -s
     self.MFlg = True
+    self.roxflg = True
 
   def rotateIncY(self, v):
     """Arguments:
@@ -645,6 +671,7 @@ class Shape(Loadable):
     self.roy[0, 2] = -s
     self.roy[2, 0] = s
     self.MFlg = True
+    self.royflg = True
 
   def rotateIncZ(self, v):
     """Arguments:
@@ -658,6 +685,7 @@ class Shape(Loadable):
     self.roz[0, 1] = s
     self.roz[1, 0] = -s
     self.MFlg = True
+    self.rozflg = True
 
   def _lathe(self, path, sides=12, rise=0.0, loops=1.0):
     """Returns a Buffer object by rotating the points defined in path.
@@ -738,3 +766,31 @@ class Shape(Loadable):
       opy = py
 
     return Buffer(self, verts, tex_coords, idx, norms)
+  
+  def __getstate__(self):
+    return {
+      'unif': list(self.unif),
+      #'childModel': self.childModel,
+      'children': self.children,
+      'name': self.name,
+      'buf': self.buf,
+      'textures': self.textures,
+      'shader': self.shader
+
+      }
+  
+  def __setstate__(self, state):
+    unif_tuple = tuple(state['unif'])
+    self.unif = (ctypes.c_float * 60)(*unif_tuple)
+    #self.childModel = state['childModel']
+    self.name = state['name']
+    self.children = state['children']
+    self.buf = state['buf']
+    self.textures = state['textures']
+    self.shader = state['shader']
+    self.opengl_loaded = False
+    self.disk_loaded = True
+    self._camera = None
+    self.__init_matrices()
+
+

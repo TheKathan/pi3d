@@ -4,6 +4,80 @@ Tim Skillman, Patrick Gaunt, Tom Ritchford
 
 Date        Amends
 
+v2.6
+2015-07-02  Moved Shader specific code from Shape.draw() to Buffer.draw()
+            to allow different Shaders on parts of same shape. MergeShape
+            uses faster numpy RotateVec and copies other parts of Buffer
+            as well as arrays.
+
+v2.5
+2015-06-07  better loading of alternative shared objects i.e. for ubuntu MATE
+            StereoCam added.
+v2.4
+2015-06-06  some bug fixes w.r.t
+            init on ubuntu MATE
+v2.3
+2015-06-04  ubuntu MATE has different copies of EGL and GLESv2
+            also pygame needs closing on some windows systems
+
+v2.2
+2015-05-23  Windows dll requirement clarified. Keyboard on windows returns
+            same codes as X11 (more or less)
+
+v2.1
+2015-05-09  Texture.__init__ now copes with numpy array and a method has
+            been added to make only the required opengles function calls
+            for each texture change. This will now produce reasonable
+            video textues. Some fixes to running on windows for mouse and
+            tk argument to display creation.
+
+v2.0
+2015-04-28  Runs on windows using pygame and ANGLE dll files. Some speed
+            increases, use of numpy arrays in Camera, much better
+            reflection shader. 
+
+v1.14
+2015-03-19  Fairly major change in the way python array data is passed to
+            libGLESv2 functions. Now generally uses ndarray.ctypes.data
+            rather than expanding values and creating a new ctypes array.
+            Lines class and line drawing added. anti-alias defaults off
+            as it breaks pi3d on vmware. Mouse option to use x11 pointer
+            as standard Mouse doesn't work on vmware. 
+
+v1.13
+2015-02-05  Importable to Android using python-for-android. Mouse buttons
+            and thread stopping on program close. EGL anti-aliasing.
+            Texture pickling fixed.
+
+v1.12
+2014-12-22  Light can be defined as originating from a point. Shaders can
+            use #include to reduce duplication of code
+            
+v1.11
+2014-11-24  bug fix PIL.Image.tobytes() does not work with the old python-
+            imaging. Texture can be passed an Image object instead of a
+            string path to an image file.
+            
+v1.10
+2014-10-21  scenery functionality bug fixes.a utility class has been added
+            for background loading scenery as elevation maps and mergegroups.
+            Elevationmap.calcheight fixed and provides optional return of
+            normal vector. Shaders downgraded to consistant medium precesion
+            as this is limited on some platforms.
+
+v1.9
+2014-08-02  minor fixes pypi status moved to stable. String.quick_change
+            allows change of text without creating new String object
+
+v1.8
+2014-04-23  various fixes and enhancements. uv_reflect and mat_reflect
+            shaders now map reflected image correctly. Shapes have a list
+            of children that inherit transformations (i.e. finger child
+            of hand <- forearm <- upper-arm <- body etc) Sphere has argument
+            invert that makes normals face in for use as environment. More
+            flexible loading of wavefront obj files. Large sprites can be
+            made using an array of textures.
+
 v1.7
 2014-01-20  Minor fixes.
 

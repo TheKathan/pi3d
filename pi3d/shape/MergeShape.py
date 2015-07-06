@@ -1,8 +1,9 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-import ctypes
+#import ctypes
 import math
 import random
+import numpy as np
 
 from pi3d.constants import *
 from pi3d.Buffer import Buffer
@@ -40,6 +41,7 @@ class MergeShape(Shape):
 
     self.buf = []
     self.buf.append(Buffer(self, self.vertices, self.tex_coords, self.indices, self.normals))
+    self.childModel = None #unused but asked for by pickle
 
   def merge(self, bufr, x=0.0, y=0.0, z=0.0,
             rx=0.0, ry=0.0, rz=0.0,
@@ -64,37 +66,60 @@ class MergeShape(Shape):
     else:
       buflist = bufr
 
+    buf = self.buf[0].array_buffer # alias to tidy code
+    vertices = buf[:,0:3] if len(buf) > 0 else buf
+    normals = buf[:,3:6] if len(buf) > 0 else buf
+    tex_coords = buf[:,6:8] if len(buf) > 0 else buf #TODO this will only cope with N_BYTES == 32
+    indices = self.buf[0].element_array_buffer[:]
+
     for b in buflist:
       if not(type(b[0]) is Buffer):
         bufr = b[0].buf[0]
       else:
         bufr = b[0]
 
-      #assert shape.ttype == GL_TRIANGLES # this is always true of Buffer objects
-      assert len(bufr.vertices) == len(bufr.normals)
+      n = len(bufr.array_buffer)
 
       if VERBOSE:
         print("Merging", bufr.name)
 
-      original_vertex_count = len(self.vertices)
+      original_vertex_count = len(vertices)
 
-      for v in range(0, len(bufr.vertices)):
-        # Scale, offset and store vertices
-        vx, vy, vz = rotate_vec(b[4], b[5], b[6], bufr.vertices[v])
-        self.vertices.append((vx * b[7] + b[1], vy * b[8] + b[2], vz * b[9] + b[3]))
+      vrot = rotate_vec(b[4], b[5], b[6], np.array(bufr.array_buffer[:,0:3]))
+      vrot[:,0] = vrot[:,0] * b[7] + b[1]
+      vrot[:,1] = vrot[:,1] * b[8] + b[2]
+      vrot[:,2] = vrot[:,2] * b[9] + b[3]
+      if bufr.array_buffer.shape[1] >= 6:
+        nrot = rotate_vec(b[4], b[5], b[6], np.array(bufr.array_buffer[:,3:6]))
+      else:
+        nrot = np.zeros((n, 3))
 
-        # Rotate normals
-        self.normals.append(rotate_vec(b[4], b[5], b[6], bufr.normals[v]))
+      vertices = np.append(vertices, vrot)
+      normals = np.append(normals, nrot)
+      if bufr.array_buffer.shape[1] == 8:
+        tex_coords = np.append(tex_coords, bufr.array_buffer[:,6:8])
+      else:
+        tex_coords = np.append(tex_coords, np.zeros((n, 2)))
 
-      self.tex_coords.extend(bufr.tex_coords)
+      n = int(len(vertices) / 3)
+      vertices.shape = (n, 3)
+      normals.shape = (n, 3)
+      tex_coords.shape = (n, 2)
 
-      ctypes.restype = ctypes.c_short  # TODO: remove this side-effect.
-      indices = [(i[0] + original_vertex_count, i[1] + original_vertex_count,
-                  i[2] + original_vertex_count) for i in bufr.indices]
-      self.indices.extend(indices)
+      #ctypes.restype = ctypes.c_short  # TODO: remove this side-effect.
+      faces = bufr.element_array_buffer + original_vertex_count
+      indices = np.append(indices, faces)
 
-    self.buf = []
-    self.buf.append(Buffer(self, self.vertices, self.tex_coords, self.indices, self.normals))
+      n = int(len(indices) / 3)
+      indices.shape = (n, 3)
+
+    self.buf = [Buffer(self, vertices, tex_coords, indices, normals)]
+    # add some Buffer details from last one in list
+    self.buf[0].shader = bufr.shader
+    self.buf[0].material = bufr.material
+    self.buf[0].textures = bufr.textures
+    self.buf[0].draw_method = bufr.draw_method
+    self.buf[0].unib = bufr.unib
 
   def add(self, bufr, x=0.0, y=0.0, z=0.0, rx=0.0, ry=0.0, rz=0.0,
           sx=1.0, sy=1.0, sz=1.0):
@@ -110,7 +135,8 @@ class MergeShape(Shape):
       *elevmap*
         ElevationMap object to merge onto.
       *xpos, zpos*
-        x and z location of centre of cluster.
+        x and z location of centre of cluster. These are locations RELATIVE
+        to the origin of the MergeShape
       *w, d*
         x and z direction size of the cluster.
       *count*
@@ -129,10 +155,8 @@ class MergeShape(Shape):
       z = zpos + random.random() * d - d * 0.5
       rh = random.random() * (maxscl - minscl) + minscl
       rt = random.random() * 360.0
-      y = elevmap.calcHeight(x, z) + rh * 2
+      y = elevmap.calcHeight(self.unif[0] + x, self.unif[2] + z) + rh * 2
       blist.append([bufr, x, y, z, 0.0, rt, 0.0, rh, rh, rh])
-
-    #self.merge(bufr, x, y, z, 0.0, rt, 0.0, rh, rh, rh)
     self.merge(blist)
 
   def radialCopy(self, bufr, x=0, y=0, z=0, startRadius=2.0, endRadius=2.0,

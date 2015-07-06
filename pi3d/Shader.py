@@ -8,6 +8,7 @@ from pi3d.constants import *
 from pi3d.util.Ctypes import c_chars
 from pi3d.util import Log
 from pi3d.util import Loadable
+from pi3d.util.DefaultInstance import DefaultInstance
 
 # This class based on Peter de Rivaz's mandlebrot example + Tim Skillman's work on pi3d2
 LOGGER = Log.logger(__name__)
@@ -20,7 +21,7 @@ def _opengl_log(shader, function, caption):
   function(shader, MAX_LOG_SIZE, ctypes.byref(loglen), ctypes.byref(log))
   LOGGER.info('%s: %s', caption, log.value)
 
-class Shader(object):
+class Shader(DefaultInstance):
   """This compiles and holds the shaders to be used to render the Shape Buffers
   using their draw() methods. Generally you will choose and load the Shader
   explicitly as part of the program, however some i.e. defocus are loaded
@@ -85,19 +86,20 @@ class Shader(object):
     self.shfile = shfile
 
     def make_shader(src, suffix, shader_type):
-      src = src or self.loadShader(shfile + suffix)
+      src = src or self._load_shader(shfile + suffix)
       characters = ctypes.c_char_p(src.encode())
       shader = opengles.glCreateShader(shader_type)
-      opengles.glShaderSource(shader, 1, ctypes.byref(characters), 0)
+      src_len = (ctypes.c_int * 1)(len(src)) # array of just one c_int
+      opengles.glShaderSource(shader, 1, ctypes.byref(characters), ctypes.byref(src_len))
       opengles.glCompileShader(shader)
-      self.showshaderlog(shader)
+      self.showshaderlog(shader, src)
       opengles.glAttachShader(self.program, shader)
       return shader, src
 
-    self.vshader_source, self.vshader = make_shader(
+    self.vshader, self.vshader_source = make_shader(
       vshader_source, '.vs', GL_VERTEX_SHADER)
 
-    self.fshader_source, self.fshader = make_shader(
+    self.fshader, self.fshader_source = make_shader(
       fshader_source, '.fs', GL_FRAGMENT_SHADER)
 
     opengles.glLinkProgram(self.program)
@@ -129,18 +131,23 @@ class Shader(object):
       """
     self.use()
 
+  @staticmethod
+  def _default_instance():
+    return Shader('mat_light')
+
   def use(self):
     """Makes this shader active"""
     opengles.glUseProgram(self.program)
 
-  def showshaderlog(self, shader):
+  def showshaderlog(self, shader, src):
     """Prints the compile log for a shader"""
     N = 1024
     log = (ctypes.c_char * N)()
     loglen = ctypes.c_int()
     opengles.glGetShaderInfoLog(
       shader, N, ctypes.byref(loglen), ctypes.byref(log))
-    print('shader {}, {}'.format(self.shfile, log.value))
+    if len(log.value) > 0:
+      print('shader({}) {}, {}'.format(shader, self.shfile, log.value))
 
   def showprogramlog(self, shader):
     """Prints the compile log for a program"""
@@ -150,11 +157,21 @@ class Shader(object):
     opengles.glGetProgramInfoLog(
       shader, N, ctypes.byref(loglen), ctypes.byref(log))
 
-  def loadShader(self, sfile):
+  def _load_shader(self, sfile):
     for p in sys.path:
-      if os.path.isfile(p + '/' + sfile):
-        return open(p + '/' + sfile, 'r').read()
-      elif os.path.isfile(p + '/shaders/' + sfile):
-        return open(p + '/shaders/' + sfile, 'r').read()
-      elif os.path.isfile(p + '/pi3d/shaders/' + sfile):
-        return open(p + '/pi3d/shaders/' + sfile, 'r').read()
+      for prest in ['/', '/shaders/', '/pi3d/shaders/']:
+        if os.path.isfile(p + prest + sfile):
+          return self._include_includes(p + prest, sfile)
+    if os.path.isfile(sfile):
+      return self._include_includes('', sfile)
+
+  def _include_includes(self, path, sfile):
+    new_text = ''
+    with open(path + sfile, 'r') as f:
+      for l in f:
+        if '#include' in l:
+          inc_file = l.split()[1]
+          new_text = new_text + self._include_includes(path, inc_file)
+        else:
+          new_text = new_text + l
+    return new_text

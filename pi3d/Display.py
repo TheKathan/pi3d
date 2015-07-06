@@ -12,9 +12,10 @@ from pi3d.constants import *
 from pi3d.util import Log
 from pi3d.util import Utility
 from pi3d.util.DisplayOpenGL import DisplayOpenGL
-from pi3d.Keyboard import Keyboard
 
-if PLATFORM != PLATFORM_PI:
+if PLATFORM == PLATFORM_WINDOWS:
+  import pygame
+elif PLATFORM != PLATFORM_PI and PLATFORM != PLATFORM_ANDROID:
   from pyxlib.x import *
   from pyxlib import xlib
 
@@ -26,10 +27,64 @@ MARK_CAMERA_CLEAN_ON_EACH_LOOP = True
 
 DEFAULT_FOV = 45.0
 DEFAULT_DEPTH = 24
+DEFAULT_SAMPLES = 0
 DEFAULT_NEAR = 1.0
 DEFAULT_FAR = 1000.0
 WIDTH = 0
 HEIGHT = 0
+
+if PLATFORM == PLATFORM_ANDROID:
+  from kivy.app import App
+  from kivy.uix.floatlayout import FloatLayout
+  from kivy.clock import Clock
+
+  class Pi3dScreen(FloatLayout):
+    def __init__(self, *args, **kwargs):
+      super(Pi3dScreen, self).__init__()
+      self.TAP_TM = 0.15
+      self.TAP_GAP = 1.0
+      self.moved = False
+      self.tapped = False
+      self.double_tapped = False
+      self.last_down = 0.0
+      self.last_last_down = 0.0
+      self.touch = None
+      self.previous_touch = None
+
+    def update(self, dt):
+      pass
+
+    def on_touch_down(self, touch):
+      touch.ud['down'] = True #needed for keeping track of 'other' touch location
+      self.last_last_down = self.last_down
+      self.last_down = time.time()
+      self.previous_touch = self.touch
+      self.touch = touch
+
+    def on_touch_move(self, touch):
+      self.moved = True
+      self.touch = touch
+
+    def on_touch_up(self, touch):
+      tm_now = time.time()
+      if (tm_now - self.last_down) < self.TAP_TM: #this was a tap
+        if (tm_now - self.last_last_down) < self.TAP_GAP : #and near enough to be double
+          self.double_tapped = True
+          self.tapped = False
+        else:
+          self.tapped = True
+          self.double_tapped = False
+      touch.ud['down'] = False
+
+  class Pi3dApp(App):
+    frames_per_second = 60.0
+    def set_loop(self, loop_function):
+      self.loop_function = loop_function
+
+    def build(self):
+      self.screen = Pi3dScreen()
+      Clock.schedule_interval(self.loop_function, 1.0 / self.frames_per_second)
+      return self.screen
 
 class Display(object):
   """This is the central control object of the pi3d system and an instance
@@ -47,7 +102,7 @@ class Display(object):
       An optional Tk window.
 
     """
-    if Display.INSTANCE:
+    if Display.INSTANCE is not None:
       assert ALLOW_MULTIPLE_DISPLAYS
       LOGGER.warning('A second instance of Display was created')
     else:
@@ -67,9 +122,12 @@ class Display(object):
     self.last_textures = [None, None, None] # if more than 3 used this will break in Buffer.draw()
     self.external_mouse = None
 
-    if PLATFORM != PLATFORM_PI:
+    if (PLATFORM != PLATFORM_PI and PLATFORM != PLATFORM_ANDROID and
+        PLATFORM != PLATFORM_WINDOWS):
       self.event_list = []
       self.ev = xlib.XEvent()
+    elif PLATFORM == PLATFORM_ANDROID:
+      self.android = Pi3dApp()
 
     self.opengl = DisplayOpenGL()
     self.max_width, self.max_height = self.opengl.width, self.opengl.height
@@ -189,6 +247,11 @@ class Display(object):
     except:
       pass
     Display.INSTANCE = None
+    try:
+      import pygame # NB seems to be needed on some setups (64 bit anaconda windows!)
+      pygame.quit()
+    except:
+      pass
 
   def clear(self):
     """Clear the Display."""
@@ -225,7 +288,10 @@ class Display(object):
   def _loop_begin(self):
     # TODO(rec):  check if the window was resized and resize it, removing
     # code from MegaStation to here.
-    if PLATFORM != PLATFORM_PI:
+    if PLATFORM == PLATFORM_WINDOWS:
+      if pygame.event.get(pygame.QUIT):
+        self.destroy()
+    elif PLATFORM != PLATFORM_PI and PLATFORM != PLATFORM_ANDROID:
       n = xlib.XEventsQueued(self.opengl.d, xlib.QueuedAfterFlush)
       for i in range(n):
         if xlib.XCheckMaskEvent(self.opengl.d, KeyPressMask, self.ev):
@@ -244,7 +310,7 @@ class Display(object):
     if MARK_CAMERA_CLEAN_ON_EACH_LOOP:
       from pi3d.Camera import Camera
       camera = Camera.instance()
-      if camera:
+      if camera is not None:
         camera.was_moved = False
 
     if self.tidy_needed:
@@ -279,6 +345,9 @@ class Display(object):
     self.tidy_needed = False
 
   def _loop_end(self):
+    if PLATFORM == PLATFORM_WINDOWS:
+      pygame.event.clear()
+      
     with self.lock:
       self.sprites_to_unload, to_unload = set(), self.sprites_to_unload
       if to_unload:
@@ -319,7 +388,7 @@ class Display(object):
 def create(x=None, y=None, w=None, h=None, near=None, far=None,
            fov=DEFAULT_FOV, depth=DEFAULT_DEPTH, background=None,
            tk=False, window_title='', window_parent=None, mouse=False,
-           frames_per_second=None):
+           frames_per_second=None, samples=DEFAULT_SAMPLES):
   """
   Creates a pi3d Display.
 
@@ -353,10 +422,13 @@ def create(x=None, y=None, w=None, h=None, near=None, far=None,
     Automatically create a Mouse.
   *frames_per_second*
     Maximum frames per second to render (None means "free running").
+  *samples*
+    EGL_SAMPLES default 0, set to 4 for improved anti-aliasing
   """
   if tk:
-    if PLATFORM != PLATFORM_PI:
+    if PLATFORM != PLATFORM_PI and PLATFORM != PLATFORM_ANDROID:
       #just use python-xlib same as non-tk but need dummy behaviour
+      from pi3d.Keyboard import Keyboard
       class DummyTkWin(object):
         def __init__(self):
           self.tkKeyboard = Keyboard()
@@ -367,11 +439,23 @@ def create(x=None, y=None, w=None, h=None, near=None, far=None,
           self.event_list = []
 
         def update(self):
-          self.key = self.tkKeyboard.read_code()
-          if self.key == "":
-            self.ev = ""
+          if PLATFORM == PLATFORM_WINDOWS: #uses pygame UI
+            k = self.tkKeyboard.read()
+            if k == -1:
+              self.key = ""
+              self.ev = ""
+            else:
+              if k == 27:
+                self.key = "Escape"
+              else:
+                self.key = chr(k)
+              self.ev = "key"
           else:
-            self.ev = "key"
+            self.key = self.tkKeyboard.read_code()
+            if self.key == "":
+              self.ev = ""
+            else:
+              self.ev = "key"
 
       tkwin = DummyTkWin()
       x = x or 0
@@ -386,8 +470,15 @@ def create(x=None, y=None, w=None, h=None, near=None, far=None,
         # ... just force full screen - TK will automatically fit itself into the screen
         w = 1920
         h = 1180
-      tkwin = TkWin.TkWin(window_parent, window_title, w, h)
+      if background is not None:
+        bg_i = [int(i * 255) for i in background]
+        bg = '#{:02X}{:02X}{:02X}'.format(bg_i[0], bg_i[1], bg_i[2])
+      else:
+        bg = '#000000'
+      tkwin = TkWin.TkWin(window_parent, window_title, w, h, bg)
       tkwin.update()
+      w = tkwin.winfo_width()
+      h = tkwin.winfo_height()
       if x is None:
         x = tkwin.winx
       if y is None:
@@ -407,6 +498,7 @@ def create(x=None, y=None, w=None, h=None, near=None, far=None,
     h = display.max_height - 2 * y
     if h <= 0:
       h = display.max_height
+
   LOGGER.debug('Display size is w=%d, h=%d', w, h)
 
   display.frames_per_second = frames_per_second
@@ -427,7 +519,14 @@ def create(x=None, y=None, w=None, h=None, near=None, far=None,
   display.right = x + w
   display.bottom = y + h
 
-  display.opengl.create_display(x, y, w, h, depth)
+  display.opengl.create_display(x, y, w, h, depth=depth, samples=samples)
+  if PLATFORM == PLATFORM_ANDROID:
+    display.width = display.right = display.max_width = display.opengl.width #not available until after create_display
+    display.height = display.bottom = display.max_height = display.opengl.height
+    display.top = display.bottom = 0
+    display.android.frames_per_second = frames_per_second
+    display.frames_per_second = None #to avoid clash between two systems!
+    
   display.mouse = None
 
   if mouse:
@@ -435,7 +534,7 @@ def create(x=None, y=None, w=None, h=None, near=None, far=None,
     display.mouse = Mouse(width=w, height=h, restrict=False)
     display.mouse.start()
 
-  if background:
+  if background is not None:
     display.set_background(*background)
 
   return display

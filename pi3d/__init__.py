@@ -25,7 +25,8 @@ from pi3d.Light import Light
 from pi3d.shape.EnvironmentCube import EnvironmentCube, loadECfiles
 from pi3d.shape.Sprite import Sprite, ImageSprite
 
-from pi3d.event.Event import InputEvents
+if PLATFORM != PLATFORM_WINDOWS:
+  from pi3d.event.Event import InputEvents
 
 from pi3d.shape.Building import Building
 from pi3d.shape.Building import corridor
@@ -47,6 +48,7 @@ from pi3d.shape.Model import Model
 from pi3d.shape.MultiSprite import MultiSprite
 from pi3d.shape.Plane import Plane
 from pi3d.shape.Points import Points
+from pi3d.shape.Lines import Lines
 from pi3d.shape.Sphere import Sphere
 from pi3d.shape.TCone import TCone
 from pi3d.shape.Tetrahedron import Tetrahedron
@@ -61,6 +63,7 @@ from pi3d.util import Log
 from pi3d.util import Utility
 from pi3d.util.Clashtest import Clashtest
 from pi3d.util.String import String
+from pi3d.util.FixedString import FixedString
 
 from pi3d.util.Defocus import Defocus
 from pi3d.util.Font import Font
@@ -68,6 +71,7 @@ from pi3d.util.Pngfont import Pngfont
 from pi3d.util.PostProcess import PostProcess
 from pi3d.util.Screenshot import screenshot
 from pi3d.util.ShadowCaster import ShadowCaster
+from pi3d.util.StereoCam import StereoCam
 from pi3d.util.Layer import Layer
 
 from pi3d.util.Gui import Button

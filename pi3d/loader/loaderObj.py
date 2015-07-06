@@ -59,14 +59,18 @@ def loadFileOBJ(model, fileName):
   """
   model.coordinateSystem = "Y-up"
   model.parent = None
-  model.childModel = [] # don't really need parent and child pointers but will speed up traversing tree
+  #model.childModel = [] # don't really need parent and child pointers but will speed up traversing tree
   model.vNormal = False
   model.vGroup = {} # holds the information for each vertex group
 
   # read in the file and parse into some arrays
 
   if fileName[0] != '/':
-    fileName = sys.path[0] + '/' + fileName
+    import os
+    for p in sys.path:
+      if os.path.isfile(p + '/' + fileName): # this could theoretically get different files with same name
+        fileName = p + '/' + fileName
+        break
   filePath = os.path.split(os.path.abspath(fileName))[0]
   print(filePath)
   f = open(fileName, 'r')
@@ -233,16 +237,14 @@ def loadFileOBJ(model, fileName):
     n = len(model.buf) - 1
     model.vGroup[g] = n
 
-    model.buf[n].indicesLen = len(model.buf[n].indices)
+    model.buf[n].indicesLen = len(model.buf[n].element_array_buffer)
     model.buf[n].material = (0.0, 0.0, 0.0, 0.0)
     model.buf[n].ttype = GL_TRIANGLES
 
     if VERBOSE:
       print()
-      print("indices=", len(model.buf[n].indices))
-      print("vertices=", len(model.buf[n].vertices))
-      print("normals=", len(model.buf[n].normals))
-      print("tex_coords=", len(model.buf[n].tex_coords))
+      print("indices=", len(model.buf[n].element_array_buffer))
+      print("vertices=", len(model.buf[n].array_buffer))
 
   try:
     material_lib = parse_mtl(open(os.path.join(filePath, mtllib), 'r'))
