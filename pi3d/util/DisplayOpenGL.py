@@ -43,9 +43,12 @@ class DisplayOpenGL(object):
       self.screen = xlib.XDefaultScreenOfDisplay(self.d)
       self.width, self.height = xlib.XWidthOfScreen(self.screen), xlib.XHeightOfScreen(self.screen)
 
-  def create_display(self, x=0, y=0, w=0, h=0, depth=24, samples=4):
+  def create_display(self, x=0, y=0, w=0, h=0, depth=24, samples=4, force_fullscreen=False, no_frame=False):
     self.display = openegl.eglGetDisplay(EGL_DEFAULT_DISPLAY)
     assert self.display != EGL_NO_DISPLAY
+    
+    self.force_fullscreen = force_fullscreen
+    self.no_frame = no_frame
 
     r = openegl.eglInitialize(self.display, 0, 0)
     #assert r == EGL_FALSE
@@ -136,6 +139,12 @@ class DisplayOpenGL(object):
         flags = pygame.FULLSCREEN | pygame.OPENGL
         wsize = (0, 0)
       self.width, self.height = w, h
+
+      if self.no_frame:
+          flags |= pygame.NOFRAME
+      if self.force_fullscreen:
+          flags |= pygame.FULLSCREEN
+
       self.d = pygame.display.set_mode(wsize, flags)
       self.window = pygame.display.get_wm_info()["window"]
       self.surface = openegl.eglCreateWindowSurface(self.display, self.config, self.window, 0)
