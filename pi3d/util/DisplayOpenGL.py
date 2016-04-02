@@ -22,7 +22,7 @@ class DisplayOpenGL(object):
       self.width, self.height = 320, 480 # put in some non-zero place-holders
     elif PLATFORM == PLATFORM_PI:
       b = bcm.bcm_host_init()
-      assert b >= 0
+      #assert b >= 0 ## this assertion can fail with the pi camera running too
 
       # Get the width and height of the screen
       w = c_int()
@@ -43,11 +43,10 @@ class DisplayOpenGL(object):
       self.screen = xlib.XDefaultScreenOfDisplay(self.d)
       self.width, self.height = xlib.XWidthOfScreen(self.screen), xlib.XHeightOfScreen(self.screen)
 
-  def create_display(self, x=0, y=0, w=0, h=0, depth=24, samples=4, force_fullscreen=False, no_frame=False):
+  def create_display(self, x=0, y=0, w=0, h=0, depth=24, samples=4, layer=0, no_frame=False):
     self.display = openegl.eglGetDisplay(EGL_DEFAULT_DISPLAY)
     assert self.display != EGL_NO_DISPLAY
     
-    self.force_fullscreen = force_fullscreen
     self.no_frame = no_frame
 
     r = openegl.eglInitialize(self.display, 0, 0)
@@ -59,7 +58,8 @@ class DisplayOpenGL(object):
                              EGL_DEPTH_SIZE, depth,
                              EGL_ALPHA_SIZE, 8,
                              EGL_BUFFER_SIZE, 32,
-                             EGL_SAMPLES, samples, 
+                             EGL_SAMPLES, samples,
+                             EGL_STENCIL_SIZE, 8,
                              EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
                              EGL_NONE))
     numconfig = c_int()
@@ -74,7 +74,7 @@ class DisplayOpenGL(object):
                                             EGL_NO_CONTEXT, ctypes.byref(context_attribs) )
     assert self.context != EGL_NO_CONTEXT
 
-    self.create_surface(x, y, w, h)
+    self.create_surface(x, y, w, h, layer)
 
     opengles.glDepthRangef(c_float(0.0), c_float(1.0))
     opengles.glClearColor (c_float(0.3), c_float(0.3), c_float(0.7), c_float(1.0))
@@ -98,7 +98,7 @@ class DisplayOpenGL(object):
     #opengles.glEnableClientState(GL_NORMAL_ARRAY)
     self.active = True
 
-  def create_surface(self, x=0, y=0, w=0, h=0):
+  def create_surface(self, x=0, y=0, w=0, h=0, layer=0):
     #Set the viewport position and size
     dst_rect = c_ints((x, y, w, h))
     src_rect = c_ints((x, y, w << 16, h << 16))
@@ -118,7 +118,7 @@ class DisplayOpenGL(object):
       self.dispman_element = bcm.vc_dispmanx_element_add(
         self.dispman_update,
         self.dispman_display,
-        0, ctypes.byref(dst_rect),
+        layer, ctypes.byref(dst_rect),
         0, ctypes.byref(src_rect),
         DISPMANX_PROTECTION_NONE,
         0, 0, 0)
@@ -136,15 +136,9 @@ class DisplayOpenGL(object):
       flags = pygame.RESIZABLE | pygame.OPENGL
       wsize = (w, h)
       if w == self.width and h == self.height: # i.e. full screen
-        flags = pygame.FULLSCREEN | pygame.OPENGL
+        flags = pygame.FULLSCREEN | pygame.OPENGL | pygame.NOFRAME
         wsize = (0, 0)
       self.width, self.height = w, h
-
-      if self.no_frame:
-          flags |= pygame.NOFRAME
-      if self.force_fullscreen:
-          flags |= pygame.FULLSCREEN
-
       self.d = pygame.display.set_mode(wsize, flags)
       self.window = pygame.display.get_wm_info()["window"]
       self.surface = openegl.eglCreateWindowSurface(self.display, self.config, self.window, 0)
@@ -172,7 +166,7 @@ class DisplayOpenGL(object):
       #                                min_width = 20,
       #                                min_height = 20)
 
-      xlib.XSelectInput(self.d, self.window, KeyPressMask)
+      xlib.XSelectInput(self.d, self.window, KeyPressMask | KeyReleaseMask)
       xlib.XMapWindow(self.d, self.window)
       self.surface = openegl.eglCreateWindowSurface(self.display, self.config, self.window, 0)
 

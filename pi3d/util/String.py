@@ -94,7 +94,7 @@ class String(Shape):
       glyph = font.glyph_table.get(c, default)
       if not glyph:
         continue
-      w, h, texc, verts = glyph
+      w, h, texc, verts = glyph[0:4]
       for j in verts:
         temp_verts.append((j[0]+xoff, j[1], j[2]))
       xoff += w
@@ -145,5 +145,5 @@ class String(Shape):
       self.buf[0]._select() #then just call glBufferData
       opengles.glBufferSubData(GL_ARRAY_BUFFER, 0,
                         self.buf[0].array_buffer.nbytes,
-                        self.buf[0].array_buffer.ctypes.data)
+                        self.buf[0].array_buffer.ctypes.data_as(ctypes.POINTER(ctypes.c_float)))
       self.string = new_string

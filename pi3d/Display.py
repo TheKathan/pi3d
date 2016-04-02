@@ -307,11 +307,10 @@ class Display(object):
     elif pi3d.PLATFORM != pi3d.PLATFORM_PI and pi3d.PLATFORM != pi3d.PLATFORM_ANDROID:
       n = xlib.XEventsQueued(self.opengl.d, xlib.QueuedAfterFlush)
       for i in range(n):
-        if xlib.XCheckMaskEvent(self.opengl.d, KeyPressMask, self.ev):
-          self.event_list.append(self.ev)
-        else:
           xlib.XNextEvent(self.opengl.d, self.ev)
-          if self.ev.type == ClientMessage:
+          if self.ev.type == KeyPress or self.ev.type == KeyRelease:
+              self.event_list.append(self.ev)
+          elif self.ev.type == ClientMessage:
             if (self.ev.xclient.data.l[0] == self.opengl.WM_DELETE_WINDOW.value):
               self.destroy()
     self.clear()
@@ -402,8 +401,7 @@ class Display(object):
 def create(x=None, y=None, w=None, h=None, near=None, far=None,
            fov=DEFAULT_FOV, depth=DEFAULT_DEPTH, background=None,
            tk=False, window_title='', window_parent=None, mouse=False,
-           frames_per_second=None, samples=DEFAULT_SAMPLES, use_pygame=False,
-           fullscreen=False, no_frame=False):
+           frames_per_second=None, samples=DEFAULT_SAMPLES, use_pygame=False, layer=0, no_frame=False):
   """
   Creates a pi3d Display.
 
@@ -538,13 +536,14 @@ def create(x=None, y=None, w=None, h=None, near=None, far=None,
   display.right = x + w
   display.bottom = y + h
 
-  display.opengl.create_display(x, y, w, h, depth=depth, samples=samples, force_fullscreen=fullscreen, no_frame=no_frame)
+  display.opengl.create_display(x, y, w, h, depth=depth, samples=samples, layer=layer, no_frame=no_frame)
   if pi3d.PLATFORM == pi3d.PLATFORM_ANDROID:
     display.width = display.right = display.max_width = display.opengl.width #not available until after create_display
     display.height = display.bottom = display.max_height = display.opengl.height
     display.top = display.bottom = 0
-    display.android.frames_per_second = frames_per_second
-    display.frames_per_second = None #to avoid clash between two systems!
+    if frames_per_second is not None:
+      display.android.frames_per_second = frames_per_second
+      display.frames_per_second = None #to avoid clash between two systems!
     
   display.mouse = None
 

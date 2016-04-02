@@ -24,6 +24,8 @@ class _nixMouse(threading.Thread):
   RIGHT_BUTTON = 10 # 1010
   MIDDLE_BUTTON = 12 # 1100
   BUTTON_UP = 8 # 1000
+  MOUSE_WHEEL_UP = 13 # TODO way of setting IMPS/2 mouse to get scroll events
+  MOUSE_WHEEL_DOWN = 14 # would need 4 bytes rather than 3 in _check_event()
   BUTTONS = BUTTON_1 & BUTTON_2
   HEADER = 1 << 3
   XSIGN = 1 << 4
@@ -68,6 +70,8 @@ class _nixMouse(threading.Thread):
         self.rooty = ctypes.c_int(0)
         self.mask = ctypes.c_uint(0)
         self.use_x = True
+        self.x_offset = Display.INSTANCE.width // 2 + 1
+        self.y_offset = Display.INSTANCE.height // 2
 
     self.daemon = True # to kill app rather than waiting for mouse event
     self.reset()
@@ -89,29 +93,35 @@ class _nixMouse(threading.Thread):
     self.fd.close()
 
   def position(self):
+    ''' returns x, y tuple
+    '''
     if self.use_x:
       xlib.XQueryPointer(self.d, self.window,
                         ctypes.byref(self.root), ctypes.byref(self.child),
                         ctypes.byref(self.rootx), ctypes.byref(self.rooty),
                         ctypes.byref(self.x),ctypes.byref(self.y),
                         self.mask)
-      return self.x.value, self.y.value
+      return self.x.value - self.x_offset, -self.y.value + self.y_offset
     else:
       with self.lock:
         return self._x, self._y
 
   def velocity(self):
+    ''' returns dx, dy tuple of distance moved since last reading
+    '''
     with self.lock:
-      return self._dx, self._dy
+      dx, dy = self._dx, self._dy
+      self._dx, self._dy = 0, 0 # need resetting after a read as no event will do this
+      return dx, dy
 
   def button_status(self):
     '''return the button status - use events system for capturing button
     events more scientifically.
-    in _check_event self.buffr returns the following binary:
-    L-button 00001001 00000000 00000000
-    R-button 00001010 00000000 00000000
-    M-button 00001100 00000000 00000000
-    buttonUp 00001000 00000000 00000000
+    in _check_event self.buffr returns the following values:
+    Mouse.LEFT_BUTTON 9
+    Mouse.RIGHT_BUTTON 10
+    Mouse.MIDDLE_BUTTON 12
+    Mouse.BUTTONUP 8
     '''
     with self.lock:
       return self._buttons
@@ -119,10 +129,10 @@ class _nixMouse(threading.Thread):
   def _check_event(self):
     if len(self.buffr) >= 3:
       buttons = [ord(c) for c in self.buffr]
-      if buttons[1] == 0 and buttons[2] == 0:
+      if buttons[0] in [8, 9, 10, 12]:
         self._buttons = buttons[0]
-      else:
-        self._buttons = 0
+      #else:
+      #  self._buttons = 0
       buttons = buttons[0]
       self.buffr = self.buffr[1:]
       if (buttons & _nixMouse.HEADER) > 0:
@@ -163,7 +173,10 @@ class _pygameMouse(object):
   RIGHT_BUTTON = 10 # 1010
   MIDDLE_BUTTON = 12 # 1100
   BUTTON_UP = 8 # 1000
-  BUTTON_MAP = {1:LEFT_BUTTON, 2:MIDDLE_BUTTON, 3:RIGHT_BUTTON}
+  MOUSE_WHEEL_UP = 13
+  MOUSE_WHEEL_DOWN = 14
+  BUTTON_MAP = {1:LEFT_BUTTON, 2:MIDDLE_BUTTON, 3:RIGHT_BUTTON,
+                4:MOUSE_WHEEL_UP, 5:MOUSE_WHEEL_DOWN}
   BUTTONS = BUTTON_1 & BUTTON_2
   HEADER = 1 << 3
   XSIGN = 1 << 4
@@ -209,8 +222,8 @@ class _pygameMouse(object):
       if self.restrict:
         self._dx = x - self._x
         self._dy = -y - self._y # swap to +ve upwards
-        self._x = x
-        self._y = -y
+        self._x = x - self.centre[0]
+        self._y = -y + self.centre[1]
       else:
         self._dx = x - self.centre[0]
         self._dy = self.centre[1] - y # swap to +ve upwards
@@ -226,16 +239,32 @@ class _pygameMouse(object):
         self._buttons = _pygameMouse.BUTTON_UP
 
   def position(self):
+    ''' returns x, y tuple
+    '''
     self._check_event()
     return self._x, self._y
 
   def velocity(self):
+    ''' returns dx, dy tuple of distance moved since last reading
+    '''
     self._check_event()
-    return self._dx, self._dy
+    dx, dy = self._dx, self._dy
+    self._dx, self._dy = 0, 0 # need resetting after a read as no event will do this
+    return dx, dy
     
   def button_status(self):
+    '''return the button status - use events system for capturing button
+    events more scientifically.
+    in _check_event self.buffr returns the following values:
+    Mouse.LEFT_BUTTON 9
+    Mouse.RIGHT_BUTTON 10
+    Mouse.MIDDLE_BUTTON 12
+    Mouse.BUTTONUP 8
+    '''
     self._check_event()
-    return self._buttons
+    b_val = self._buttons
+    #self._buttons = _pygameMouse.BUTTON_UP
+    return b_val
 
   def stop(self):
     pass

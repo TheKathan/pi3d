@@ -9,26 +9,16 @@ class OffScreenTexture(Texture):
   """For creating special effect after rendering to texture rather than
   onto the display. Used by Defocus, ShadowCaster, Clashtest etc
   """
-  def __init__(self, name, w=None, h=None):
+  def __init__(self, name):
     """ calls Texture.__init__ but doesn't need to set file name as
     texture generated from the framebuffer
     """
     super(OffScreenTexture, self).__init__(name)
     from pi3d.Display import Display
-    if(w == None):
-        self.ix = Display.INSTANCE.width
-    else:
-        self.ix = w
-    if(h == None):
-        self.iy = Display.INSTANCE.height
-    else:
-        self.iy = h
-        
+    self.ix, self.iy = Display.INSTANCE.width, Display.INSTANCE.height
     self.im = Image.new("RGBA",(self.ix, self.iy))
-    #self.image = self.im.convert("RGBA").tostring('raw', "RGBA")
     self.im = self.im.convert("RGBA")
     self.image = np.array(self.im)
-    self.alpha = True
     self.blend = False
     self.mipmap = False
 
@@ -56,9 +46,9 @@ class OffScreenTexture(Texture):
                 self.ix, self.iy)
     opengles.glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
                 GL_RENDERBUFFER, self.depthbuffer[0])
-    if clear:
-        opengles.glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT)
-        
+    if clear: # TODO allow just depth or just color clearing?
+      opengles.glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT)
+
     #assert opengles.glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE
 
   def _end(self):

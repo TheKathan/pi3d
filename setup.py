@@ -18,12 +18,25 @@ which really just does this:
 
   import sys
   sys.append('/home/pi/pi3d')
-"""
-from distutils.core import setup
+
+# see the pull request from stuaxo here https://github.com/tipam/pi3d/pull/183
+as to why you might want to uncomment the following four lines (and comment 
+out the 'from distutils.core..' after. """
+#try:
+#    from setuptools.commands import setup
+#except ImportError:
+#    from distutils.core import setup
+from distutils.core import setup    
 from os import listdir
 
+with open('pi3d/constants/__init__.py', 'r') as f:
+  for l in f:
+    if l.find('__version__') == 0:
+      version = (l.split('=')[1]).strip().strip("\'\"")
+      break
+
 setup(name='pi3d',
-      version='2.7',
+      version=version,
       description='pi3d OpenGLES2 3D graphics library',
       author='Tim Skillman, Paddy Gaunt, Tom Ritchford',
       author_email='http://pi3d.github.com/html/index.html',
